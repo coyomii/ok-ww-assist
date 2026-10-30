@@ -13,6 +13,10 @@ def menu_frame(phase):
     if phase == 'success':
         frame[190:230, 570:710] = (185, 220, 255)
         frame[600:630, 540:740] = 245
+    elif phase == 'first_success':
+        frame[190:230, 570:710] = (185, 220, 255)
+        frame[600:630, 380:570] = 245
+        frame[600:630, 710:900] = 245
     elif phase == 'record':
         frame[110:575, 220:1060] = 245
     elif phase in {'floor', 'party'}:
@@ -20,15 +24,15 @@ def menu_frame(phase):
     return frame
 
 
-def result_task(with_record=True, stuck=None):
+def result_task(with_record=True, stuck=None, first_clear=False):
     task = make_task()
-    task.phase = 'success'
+    task.phase = 'first_success' if first_clear else 'success'
     task.frame = menu_frame(task.phase)
     task.held.update(('w', 'left', 'e'))
     task.success_title = '挑战成功'
-    task.success_button = '确认成绩'
+    task.success_button = '返回深塔' if first_clear else '确认成绩'
     task.success_title_x = .445
-    task.success_button_x = .47
+    task.success_button_x = .34 if first_clear else .47
     task.record_prompt = '是否覆盖深境之塔的挑战成绩'
     task.record_title = '确认记录'
     task.record_old = '原记录'
@@ -51,6 +55,9 @@ def result_task(with_record=True, stuck=None):
         labels = {
             'success': [(task.success_title, task.success_title_x, .28),
                         (task.success_button, task.success_button_x, .84)],
+            'first_success': [(task.success_title, task.success_title_x, .28),
+                              (task.success_button, task.success_button_x, .84),
+                              ('继续挑战', .60, .84)],
             'record': [(task.record_title, .186, .184), (task.record_prompt, .35, .285),
                        (task.record_old, .22, .38), (task.record_new, .52, .38),
                        ('取消', .28, .715), ('确认', .68, .715)],
@@ -76,7 +83,9 @@ def result_task(with_record=True, stuck=None):
         task.events.append((button.name, task.now))
         if task.phase == stuck:
             return
-        if task.phase == 'success':
+        if task.phase == 'first_success' and button.name == '返回深塔':
+            task.phase = 'floor'
+        elif task.phase == 'success':
             task.phase = 'record' if with_record else 'floor'
         elif task.phase == 'record' and button.name == '取消':
             task.phase = 'floor'
@@ -95,10 +104,48 @@ def result_task(with_record=True, stuck=None):
 
 
 def menu_clicks(task):
-    return [e[0] for e in task.events if e[0] in {'确认成绩', '取消', '确认', '挑战开始', '开启挑战'}]
+    return [e[0] for e in task.events if e[0] in
+            {'确认成绩', '返回深塔', '继续挑战', '取消', '确认', '挑战开始', '开启挑战'}]
 
 
 class SuccessTests(unittest.TestCase):
+    def test_first_clear_returns_to_floor_and_resumes_existing_challenge_flow(self):
+        task = result_task(first_clear=True)
+        task.run()
+        self.assertEqual(menu_clicks(task), ['返回深塔', '挑战开始', '开启挑战'])
+        self.assertEqual(task.info['已完成挑战次数'], 2)
+        self.assertEqual(task.info['挑战成功次数'], 1)
+        self.assertEqual(len([e for e in task.events if e[:2] == ('tap', 'f')]), 1)
+        self.assertFalse(task.held)
+
+    def test_first_clear_at_count_limit_returns_without_opening_next_challenge(self):
+        task = result_task(first_clear=True)
+        task.config['挑战次数（0为持续）'] = 1
+        task.run()
+        self.assertEqual(menu_clicks(task), ['返回深塔'])
+        self.assertEqual(task.info['已完成挑战次数'], 1)
+        self.assertFalse(task.held)
+
+    def test_first_clear_requires_success_title_and_return_button_in_left_position(self):
+        for field, value in [('success_title', '挑战失败'), ('success_button', '继续挑战'),
+                             ('success_button_x', .60)]:
+            task = result_task(first_clear=True)
+            setattr(task, field, value)
+            task._fresh()
+            self.assertFalse(menu_clicks(task))
+        for size in ((1280, 720), (1920, 1080), (2560, 1440)):
+            task = result_task(first_clear=True)
+            task.success_title = '挑戰成功'
+            task.frame = cv2.resize(task.frame, size)
+            self.assertEqual(task._success_box().name, '返回深塔')
+
+    def test_stuck_first_clear_clicks_return_once_then_stops(self):
+        task = result_task(first_clear=True, stuck='first_success')
+        with self.assertRaisesRegex(RuntimeError, '返回深塔.*不重复点击或重开'):
+            task.run()
+        self.assertEqual(menu_clicks(task), ['返回深塔'])
+        self.assertFalse(task.held)
+
     def test_starting_from_record_floor_or_party_menu_resumes_existing_selection(self):
         for phase, expected in (
                 ('record', ['取消', '挑战开始', '开启挑战']),

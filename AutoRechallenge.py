@@ -27,7 +27,7 @@ class AutoRechallenge(WWOneTimeTask, BaseCombatTask):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.name = '通用自动重新挑战'
-        self.description = '自动重新挑战、加载、找F开战；深塔成功后确认成绩、取消覆盖记录，并沿用已选角色继续挑战。'
+        self.description = '自动重新挑战、加载、找F开战；深塔成功后确认成绩或返回深塔，取消覆盖记录，并沿用已选角色继续挑战。'
         self.default_config = {
             '挑战次数（0为持续）': 0,
             '加载超时（秒）': 120,
@@ -73,20 +73,25 @@ class AutoRechallenge(WWOneTimeTask, BaseCombatTask):
 
     @staticmethod
     def _success_hint(frame):
-        # Standard 16:9 success overlay: gold title and white bottom button.
+        # Standard 16:9 success overlay: gold title and either the centered
+        # confirmation button or the first-clear return button on the left.
         if frame is None or len(frame.shape) != 3:
             return False
         h, w = frame.shape[:2]
         if h <= 0 or w <= 0 or abs(w / h - 16 / 9) > .03:
             return False
         title = frame[int(.26*h):int(.33*h), int(.43*w):int(.57*w), :3]
-        button = frame[int(.83*h):int(.88*h), int(.42*w):int(.58*w), :3]
-        if not title.size or not button.size:
+        if not title.size:
             return False
         gold = ((title[:, :, 2] > 200) & (title[:, :, 1] > 170)
                 & (title[:, :, 0] < 230)).mean()
-        white = (button.min(axis=2) > 180).mean()
-        return bool(gold > .01 and white > .25)
+        if gold <= .01:
+            return False
+        for x0, x1 in ((.42, .58), (.30, .44)):
+            button = frame[int(.83*h):int(.88*h), int(x0*w):int(x1*w), :3]
+            if button.size and (button.min(axis=2) > 180).mean() > .25:
+                return True
+        return False
 
     def _success_box(self):
         frame = getattr(self, 'frame', None)
@@ -97,9 +102,14 @@ class AutoRechallenge(WWOneTimeTask, BaseCombatTask):
         titles = [b for b in boxes
                   if re.sub(r'\s+', '', b.name) in {'挑战成功', '挑戰成功'}
                   and .38 <= b.x / w <= .60 and .24 <= b.y / h <= .35]
-        buttons = [b for b in boxes
-                   if re.sub(r'\s+', '', b.name) in {'确认成绩', '確認成績'}
-                   and .40 <= b.x / w <= .60 and .80 <= b.y / h <= .90]
+        buttons = []
+        for b in boxes:
+            label = re.sub(r'\s+', '', b.name)
+            if not .80 <= b.y / h <= .90:
+                continue
+            if ((label in {'确认成绩', '確認成績'} and .40 <= b.x / w <= .60)
+                    or (label == '返回深塔' and .30 <= b.x / w <= .45)):
+                buttons.append(b)
         return buttons[0] if len(titles) == len(buttons) == 1 else None
 
     def _confirm_success(self):
@@ -119,7 +129,7 @@ class AutoRechallenge(WWOneTimeTask, BaseCombatTask):
             self.info_set('挑战成功', True)
             self.executor.check_enabled()
             self.click(button)
-            self._mark('challenge success confirmed twice; result confirmation clicked once')
+            self._mark(f'challenge success confirmed twice; {button.name} clicked once')
             deadline = monotonic() + self.SUCCESS_CLOSE_TIMEOUT
             gone = 0
             while monotonic() < deadline:
@@ -130,7 +140,7 @@ class AutoRechallenge(WWOneTimeTask, BaseCombatTask):
                 gone = gone + 1 if not self._success_hint(self.frame) else 0
                 if gone >= 2:
                     raise self.ChallengeSucceeded()
-            raise RuntimeError('挑战成功后已点击一次“确认成绩”，但未确认结算页关闭；已停止，不重复点击或重开。')
+            raise RuntimeError(f'挑战成功后已点击一次“{button.name}”，但未确认结算页关闭；已停止，不重复点击或重开。')
         finally:
             self._testing_combat = was_combat
 
