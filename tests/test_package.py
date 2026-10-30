@@ -18,7 +18,7 @@ class PackageTests(unittest.TestCase):
             manifest = json.loads(package.read('manifest.json'))
             self.assertEqual(manifest['file_name'], 'AutoRechallenge')
             self.assertEqual(manifest['version'], '1.0.0')
-            self.assertEqual(manifest['script_name'], 'OKWW 通用辅助')
+            self.assertEqual(manifest['script_name'], '通用辅助')
             self.assertEqual(manifest['tasks'], [[name, name] for name in
                              ('AutoRechallenge', 'MedicineMonitor', 'MedicineFarmEcho')])
             source = package.read('AutoRechallenge.py').decode('utf-8')

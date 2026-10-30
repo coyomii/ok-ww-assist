@@ -1,4 +1,4 @@
-# ok-ww-assist · OKWW 通用辅助
+# ok-ww-assist · 通用辅助
 
 适用于 [OKWW](https://github.com/ok-oldking/ok-wuthering-waves) 的第三方辅助插件，当前版本 **1.0.0**。一个导入包包含自动重新挑战、自动用药监测和刷4C声骸用药入口。
 

@@ -8,7 +8,7 @@ from zipfile import ZipFile, ZIP_DEFLATED
 
 ROOT = Path(__file__).resolve().parent
 PROJECT_NAME = 'ok-ww-assist'
-SCRIPT_NAME = 'OKWW 通用辅助'
+SCRIPT_NAME = '通用辅助'
 PACKAGE_ID = 'AutoRechallenge'  # Keep existing installations/settings compatible.
 RUNTIME_FILES = ('AutoRechallenge.py', 'ArMedicine.py', 'MedicineMonitor.py', 'MedicineFarmEcho.py')
 TASKS = [[name, name] for name in ('AutoRechallenge', 'MedicineMonitor', 'MedicineFarmEcho')]

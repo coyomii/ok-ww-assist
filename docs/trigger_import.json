@@ -1,7 +1,7 @@
 {
   "project": "ok-ww-assist",
   "version": "1.0.0",
-  "display_name": "OKWW 通用辅助",
+  "display_name": "通用辅助",
   "package_id": "AutoRechallenge",
   "game_input_executed": false,
   "packages": [

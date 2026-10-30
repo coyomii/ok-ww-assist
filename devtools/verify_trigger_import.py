@@ -54,7 +54,7 @@ def verify_isolated(temp):
         archive = ROOT / 'release' / f'ok-ww-assist-{version}{suffix}'
         manifest = inspect_script_archive(archive)
         assert manifest['version'] == '1.0.0'
-        assert manifest['script_name'] == 'OKWW 通用辅助'
+        assert manifest['script_name'] == '通用辅助'
         assert manifest['file_name'] == 'AutoRechallenge'
         # A lower unified version must still replace the previous development
         # plugin through local import, keeping its stable package identity.
@@ -196,7 +196,7 @@ def verify_isolated(temp):
                         'single_probe_returns': True, 'next_trigger_can_run': True,
                         'disabled_skips_probe': True})
     return {'project': 'ok-ww-assist', 'version': version,
-            'display_name': 'OKWW 通用辅助', 'package_id': 'AutoRechallenge',
+            'display_name': '通用辅助', 'package_id': 'AutoRechallenge',
             'game_input_executed': False, 'packages': reports}
 
 
