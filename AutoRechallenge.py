@@ -7,8 +7,8 @@ from src.task.WWOneTimeTask import WWOneTimeTask
 
 
 class AutoRechallenge(WWOneTimeTask, BaseCombatTask):
-    VERSION = '1.0.0'
-    BUILD = 'ok-ww-assist-1.0.0/rechallenge'
+    VERSION = '1.0.1'
+    BUILD = 'ok-ww-assist-1.0.1/rechallenge'
     RETRY_TEXT = re.compile(r'^\s*(?:重新挑战|重新挑戰|再次挑战|再次挑戰|Retry|Challenge\s+Again)\s*$', re.I)
     START_TEXT = re.compile(r'开始|開始|开启|開啟|\bStart\b', re.I)
     POLL = 0.20

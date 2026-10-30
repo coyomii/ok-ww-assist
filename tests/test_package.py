@@ -10,14 +10,14 @@ ROOT = Path(__file__).resolve().parents[1]
 
 class PackageTests(unittest.TestCase):
     def test_package_is_portable_and_has_only_runtime_files(self):
-        with ZipFile(ROOT / 'release/ok-ww-assist-1.0.0.okscript') as package:
+        with ZipFile(ROOT / 'release/ok-ww-assist-1.0.1.okscript') as package:
             self.assertEqual(set(package.namelist()), {'AutoRechallenge.py', 'ArMedicine.py',
                              'MedicineMonitor.py', 'MedicineFarmEcho.py', 'manifest.json'})
             self.assertEqual(package.read('AutoRechallenge.py'), (ROOT / 'AutoRechallenge.py').read_bytes())
             self.assertEqual(package.read('manifest.json'), (ROOT / 'manifest.json').read_bytes())
             manifest = json.loads(package.read('manifest.json'))
             self.assertEqual(manifest['file_name'], 'AutoRechallenge')
-            self.assertEqual(manifest['version'], '1.0.0')
+            self.assertEqual(manifest['version'], '1.0.1')
             self.assertEqual(manifest['script_name'], '通用辅助')
             self.assertEqual(manifest['tasks'], [[name, name] for name in
                              ('AutoRechallenge', 'MedicineMonitor', 'MedicineFarmEcho')])
@@ -29,8 +29,8 @@ class PackageTests(unittest.TestCase):
                 self.assertEqual(package.read(name), (ROOT / name).read_bytes())
 
     def test_release_zip_has_same_payload_inside_package_folder(self):
-        with ZipFile(ROOT / 'release/ok-ww-assist-1.0.0.okscript') as script, \
-                ZipFile(ROOT / 'release/ok-ww-assist-1.0.0.zip') as release:
+        with ZipFile(ROOT / 'release/ok-ww-assist-1.0.1.okscript') as script, \
+                ZipFile(ROOT / 'release/ok-ww-assist-1.0.1.zip') as release:
             self.assertEqual(set(release.namelist()),
                              {'AutoRechallenge/' + name for name in script.namelist()})
             for name in script.namelist():

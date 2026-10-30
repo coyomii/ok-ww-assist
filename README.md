@@ -1,13 +1,13 @@
 # ok-ww-assist · 通用辅助
 
-适用于 [OKWW](https://github.com/ok-oldking/ok-wuthering-waves) 的第三方辅助插件，当前版本 **1.0.0**。一个导入包包含自动重新挑战、自动用药监测和刷4C声骸用药入口。
+适用于 [OKWW](https://github.com/ok-oldking/ok-wuthering-waves) 的第三方辅助插件，当前版本 **1.0.1**。一个导入包包含自动重新挑战、自动用药监测和刷4C声骸用药入口。
 
 ## 安装 / 更新
 
 需要支持插件清单的 OKWW / ok-script（2.0.15 起）。
 
 1. 停止正在运行的任务，在 OKWW「插件」页添加仓库 `coyomii/ok-ww-assist`。
-2. 也可从 [最新 Release](https://github.com/coyomii/ok-ww-assist/releases/latest) 下载 `ok-ww-assist-1.0.0.zip`，选择「导入本地文件」。旧版脚本界面使用本地构建的 `.okscript`，入口为「脚本」→「文件」→「导入脚本」。
+2. 也可从 [最新 Release](https://github.com/coyomii/ok-ww-assist/releases/latest) 下载 `ok-ww-assist-1.0.1.zip`，选择「导入本地文件」。旧版脚本界面使用本地构建的 `.okscript`，入口为「脚本」→「文件」→「导入脚本」。
 3. 更新后完全退出 OKWW（包括托盘）再重启。
 4. 需要监测用药时，在「实时触发」页找到「自动用药监测」，打开「启用」开关，并让 OKWW 处于运行状态。首次导入默认关闭。
 
@@ -56,7 +56,7 @@ python -B -m unittest discover -s tests -p 'test_*.py'
 python -B devtools/verify_trigger_import.py '<OKWW working 目录>'
 ```
 
-构建生成 `release/ok-ww-assist-1.0.0.zip` 和 `.okscript`。GitHub Release 仅上传 ZIP，内含四个 Python 文件和 manifest；生成包不提交到源码仓库。可选 `Install.ps1 -WorkingDirectory '<OKWW working 目录>'` 在构建后离线安装，只复制本包并备份本包的旧运行文件。
+构建生成 `release/ok-ww-assist-1.0.1.zip` 和 `.okscript`。GitHub Release 仅上传 ZIP，内含四个 Python 文件和 manifest；生成包不提交到源码仓库。可选 `Install.ps1 -WorkingDirectory '<OKWW working 目录>'` 在构建后离线安装，只复制本包并备份本包的旧运行文件。
 
 测试使用合成画面和模拟输入；框架验证在临时目录检查导入、任务分类、真实开关控件与配置持久化。详见 [验证记录](VALIDATION.md)。尚未完成本次发布版本的真实游戏验证。
 

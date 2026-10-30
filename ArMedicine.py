@@ -195,13 +195,13 @@ class ReviveMedicine:
             count = self.quantity(chosen, panel['frame'])
             if count is None or count <= 0:
                 raise RuntimeError('复活药库存发生变化：已停止，不继续点击。')
-            t.log_info(f'ok-ww-assist-1.0.0 revive card={chosen + 1} stock={count}')
+            t.log_info(f'ok-ww-assist-1.0.1 revive card={chosen + 1} stock={count}')
             t.executor.check_enabled()
             t.click(self.SLOTS[chosen], .417, down_time=.05)
             t.sleep(.30)
             cooldown = self.cooldown()
             if remaining := cooldown.remaining():
-                t.log_info(f'ok-ww-assist-1.0.0 revive cooldown remaining={remaining:.1f}s; no confirmation yet')
+                t.log_info(f'ok-ww-assist-1.0.1 revive cooldown remaining={remaining:.1f}s; no confirmation yet')
             ready = 0
             while monotonic() < deadline:
                 self.fresh()
@@ -236,7 +236,7 @@ class ReviveMedicine:
                         gone = 0
                         continue
                     t.info_set('复活弹窗处理次数', t.info.get('复活弹窗处理次数', 0) + 1)
-                    t.log_info('ok-ww-assist-1.0.0 revive dialog closed; team HUD readable')
+                    t.log_info('ok-ww-assist-1.0.1 revive dialog closed; team HUD readable')
                     return True
                 t.sleep(.25)
             raise RuntimeError('已点击一次用药确认，但未确认弹窗关闭及队伍HUD恢复；已停止，不重复用药。')

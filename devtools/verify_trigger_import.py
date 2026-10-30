@@ -53,7 +53,7 @@ def verify_isolated(temp):
     for suffix in ('.okscript', '.zip'):
         archive = ROOT / 'release' / f'ok-ww-assist-{version}{suffix}'
         manifest = inspect_script_archive(archive)
-        assert manifest['version'] == '1.0.0'
+        assert manifest['version'] == '1.0.1'
         assert manifest['script_name'] == '通用辅助'
         assert manifest['file_name'] == 'AutoRechallenge'
         # A lower unified version must still replace the previous development
