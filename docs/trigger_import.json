@@ -1,0 +1,45 @@
+{
+  "project": "ok-ww-assist",
+  "version": "1.0.0",
+  "display_name": "OKWW 通用辅助",
+  "package_id": "AutoRechallenge",
+  "game_input_executed": false,
+  "packages": [
+    {
+      "format": ".okscript",
+      "imported": true,
+      "one_time_tasks": 2,
+      "previous_development_plugin_replaced": true,
+      "trigger_tasks": 1,
+      "trigger_page_switch": true,
+      "default_enabled": false,
+      "enable_disable_persisted": true,
+      "medicine_settings_preserved": true,
+      "legacy_config_migrated": true,
+      "retry_medicine_removed": true,
+      "retry_settings_preserved": true,
+      "farm_medicine_retained": true,
+      "single_probe_returns": true,
+      "next_trigger_can_run": true,
+      "disabled_skips_probe": true
+    },
+    {
+      "format": ".zip",
+      "imported": true,
+      "one_time_tasks": 2,
+      "previous_development_plugin_replaced": true,
+      "trigger_tasks": 1,
+      "trigger_page_switch": true,
+      "default_enabled": false,
+      "enable_disable_persisted": true,
+      "medicine_settings_preserved": true,
+      "legacy_config_migrated": true,
+      "retry_medicine_removed": true,
+      "retry_settings_preserved": true,
+      "farm_medicine_retained": true,
+      "single_probe_returns": true,
+      "next_trigger_can_run": true,
+      "disabled_skips_probe": true
+    }
+  ]
+}
