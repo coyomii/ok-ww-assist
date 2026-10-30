@@ -18,12 +18,16 @@ class AutoRechallenge(WWOneTimeTask, BaseCombatTask):
     RETRY_CLICK_GAP = 1.50
     RETRY_CLICK_TRIES = 4
     ENVIRONMENT_CLOSE_TIMEOUT = 5.0
+    SUCCESS_CLOSE_TIMEOUT = 5.0
     owns_switch_healer_config = True
+
+    class ChallengeSucceeded(Exception):
+        """Unwind combat before handling the tower's post-success menus."""
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.name = '通用自动重新挑战'
-        self.description = '结算页或挑战入口运行；自动重新挑战、等待加载、短步找F开战，调用当前启用的角色或队伍代码。'
+        self.description = '自动重新挑战、加载、找F开战；深塔成功后确认成绩、取消覆盖记录，并沿用已选角色继续挑战。'
         self.default_config = {
             '挑战次数（0为持续）': 0,
             '加载超时（秒）': 120,
@@ -36,7 +40,7 @@ class AutoRechallenge(WWOneTimeTask, BaseCombatTask):
             'Switch to Healer before and after Combat': False,
         }
         self.config_description = {
-            '挑战次数（0为持续）': '到达指定场数后停在结算页；0持续运行，用OK-WW停止按钮结束。',
+            '挑战次数（0为持续）': '0持续运行；成功后继续挑战；达到指定场数则不再开启下一场。',
             '单场超时（秒）': '在角色或队伍动作返回时检查；长动作期间可能延后。',
             'Use Liberation': '允许角色逻辑使用共鸣解放；自定义角色须遵守框架开关。',
             'Switch to Healer before and after Combat': '开战前切治疗；战后仅在队伍HUD仍可读且没有结算按钮时切换。',
@@ -63,8 +67,191 @@ class AutoRechallenge(WWOneTimeTask, BaseCombatTask):
     def _fresh(self):
         self.executor.check_enabled()
         self.next_frame()
+        self._confirm_success()
         if not self._testing_combat:
             self._dismiss_environment()
+
+    @staticmethod
+    def _success_hint(frame):
+        # Standard 16:9 success overlay: gold title and white bottom button.
+        if frame is None or len(frame.shape) != 3:
+            return False
+        h, w = frame.shape[:2]
+        if h <= 0 or w <= 0 or abs(w / h - 16 / 9) > .03:
+            return False
+        title = frame[int(.26*h):int(.33*h), int(.43*w):int(.57*w), :3]
+        button = frame[int(.83*h):int(.88*h), int(.42*w):int(.58*w), :3]
+        if not title.size or not button.size:
+            return False
+        gold = ((title[:, :, 2] > 200) & (title[:, :, 1] > 170)
+                & (title[:, :, 0] < 230)).mean()
+        white = (button.min(axis=2) > 180).mean()
+        return bool(gold > .01 and white > .25)
+
+    def _success_box(self):
+        frame = getattr(self, 'frame', None)
+        if not self._success_hint(frame):
+            return None
+        h, w = frame.shape[:2]
+        boxes = self.ocr(.30, .22, .70, .92, threshold=.80, frame=frame)
+        titles = [b for b in boxes
+                  if re.sub(r'\s+', '', b.name) in {'挑战成功', '挑戰成功'}
+                  and .38 <= b.x / w <= .60 and .24 <= b.y / h <= .35]
+        buttons = [b for b in boxes
+                   if re.sub(r'\s+', '', b.name) in {'确认成绩', '確認成績'}
+                   and .40 <= b.x / w <= .60 and .80 <= b.y / h <= .90]
+        return buttons[0] if len(titles) == len(buttons) == 1 else None
+
+    def _confirm_success(self):
+        if self._success_box() is None:
+            return
+        # Leave combat before handling the post-success tower menu sequence.
+        was_combat = self._testing_combat
+        self._testing_combat = False
+        try:
+            self.sleep(.15)
+            self.executor.check_enabled()
+            self.next_frame()
+            button = self._success_box()
+            if button is None:
+                return
+            self._release()
+            self.info_set('挑战成功', True)
+            self.executor.check_enabled()
+            self.click(button)
+            self._mark('challenge success confirmed twice; result confirmation clicked once')
+            deadline = monotonic() + self.SUCCESS_CLOSE_TIMEOUT
+            gone = 0
+            while monotonic() < deadline:
+                self.sleep(self.POLL)
+                self.executor.check_enabled()
+                self.next_frame()
+                # Failed OCR alone must not permit another click or restart.
+                gone = gone + 1 if not self._success_hint(self.frame) else 0
+                if gone >= 2:
+                    raise self.ChallengeSucceeded()
+            raise RuntimeError('挑战成功后已点击一次“确认成绩”，但未确认结算页关闭；已停止，不重复点击或重开。')
+        finally:
+            self._testing_combat = was_combat
+
+    @staticmethod
+    def _tower_menu_hint(frame):
+        if frame is None or len(frame.shape) != 3:
+            return False
+        h, w = frame.shape[:2]
+        if h <= 0 or w <= 0 or abs(w / h - 16 / 9) > .03:
+            return False
+        # White record-dialog header or the tower's white bottom-right button.
+        for x0, y0, x1, y1 in ((.18, .17, .25, .23), (.78, .89, .90, .94)):
+            pixels = frame[int(y0*h):int(y1*h), int(x0*w):int(x1*w), :3]
+            if pixels.size and (pixels.min(axis=2) > 180).mean() > .40:
+                return True
+        return False
+
+    def _tower_action(self):
+        frame = getattr(self, 'frame', None)
+        if not self._tower_menu_hint(frame):
+            return None
+        h, w = frame.shape[:2]
+
+        def read(bounds):
+            return self.ocr(*bounds, threshold=.80, frame=frame)
+
+        def texts(boxes, bounds):
+            x0, y0, x1, y1 = bounds
+            return ''.join(re.sub(r'\s+', '', b.name) for b in boxes
+                           if x0 <= b.x / w <= x1 and y0 <= b.y / h <= y1)
+
+        def button(boxes, names, bounds):
+            x0, y0, x1, y1 = bounds
+            found = [b for b in boxes if re.sub(r'\s+', '', b.name) in names
+                     and x0 <= b.x / w <= x1 and y0 <= b.y / h <= y1]
+            return found[0] if len(found) == 1 else None
+
+        panel = read((.17, .15, .83, .80))
+
+        def record_text(bounds):
+            # OCR may render the game's 记录 as the synonymous 纪录.
+            return texts(panel, bounds).replace('纪录', '记录').replace('紀錄', '記錄')
+
+        title = record_text((.18, .17, .35, .24))
+        prompt = texts(panel, (.27, .26, .77, .33))
+        old = record_text((.21, .36, .35, .42))
+        new = record_text((.51, .36, .65, .42))
+        cancel = button(panel, {'取消'}, (.20, .69, .39, .76))
+        if (title in {'确认记录', '確認記錄'} and cancel is not None
+                and any(t in prompt for t in ('是否覆盖', '是否覆蓋'))
+                and any(t in prompt for t in ('挑战成绩', '挑戰成績'))
+                and old in {'原记录', '原記錄'} and new in {'新记录', '新記錄'}):
+            return 'cancel_record', cancel
+        # An unrecognized modal must not expose clickable controls behind it.
+        header_pixels = frame[int(.17*h):int(.23*h), int(.18*w):int(.25*w), :3]
+        if (header_pixels.min(axis=2) > 180).mean() > .40:
+            return None
+        header = read((.02, .03, .39, .18))
+        header_text = texts(header, (.02, .03, .39, .18))
+        if '深境之塔' not in header_text:
+            return None
+        buttons = read((.70, .87, .94, .96))
+        start = button(buttons, {'挑战开始', '挑戰開始'}, (.75, .88, .91, .95))
+        if start is not None:
+            targets = read((.40, .43, .70, .69))
+            if any(t in texts(targets, (.40, .43, .70, .69))
+                   for t in ('挑战目标', '挑戰目標')):
+                return 'challenge_start', start
+        enter = button(buttons, {'开启挑战', '開啟挑戰'}, (.70, .88, .91, .95))
+        if enter is not None and any(t in header_text for t in ('角色列表',)):
+            return 'enter_challenge', enter
+        return None
+
+    def _tower_reenter(self, start_next=True):
+        # Optional record dialog -> selected floor -> existing selected party
+        # -> loading/world. Each recognized menu gets at most one click.
+        self._release()
+        deadline = monotonic() + self.config['加载超时（秒）']
+        clicked = {}
+        previous = None
+        stable = hud_hits = 0
+        order = {'cancel_record': 0, 'challenge_start': 1, 'enter_challenge': 2}
+        last_order = -1
+        while monotonic() < deadline:
+            self.executor.check_enabled()
+            self.next_frame()
+            action = self._tower_action()
+            if action is not None:
+                name, box = action
+                hud_hits = 0
+                if not start_next and name in {'challenge_start', 'enter_challenge'}:
+                    return
+                if name in clicked:
+                    if monotonic() - clicked[name] >= 15:
+                        raise RuntimeError('深塔菜单点击后15秒未切换；已停止，不重复点击。')
+                    stable = 0
+                elif order[name] < last_order:
+                    raise RuntimeError('深塔菜单出现非预期回退；已停止，请检查画面。')
+                else:
+                    stable = stable + 1 if previous == name else 1
+                    if stable >= 2:
+                        self.executor.check_enabled()
+                        self._release()
+                        self.click(box)
+                        clicked[name] = monotonic()
+                        last_order = order[name]
+                        stable = 0
+                        self._mark(f'tower menu {name}; fresh button clicked once')
+                previous = name
+            else:
+                previous = None
+                stable = 0
+                # Do not mistake a world HUD behind a modal for loading done.
+                ready = (not self._tower_menu_hint(getattr(self, 'frame', None))
+                         and self.in_team_and_world())
+                hud_hits = hud_hits + 1 if ready else 0
+                if hud_hits >= 3:
+                    self._mark('tower loading finished; HUD ready; resume original F/combat flow')
+                    return
+            self.sleep(self.POLL)
+        raise RuntimeError('深塔成功后等待菜单或加载超时；已停止，请检查画面。')
 
     @staticmethod
     def _environment_hint(frame):
@@ -177,6 +364,9 @@ class AutoRechallenge(WWOneTimeTask, BaseCombatTask):
         while monotonic() < deadline:
             self._fresh()
             box = self._retry_box()
+            if box is None and self._tower_action() is not None:
+                self._tower_reenter()
+                return None
             retry_hits = retry_hits + 1 if box is not None else 0
             hud_hits = hud_hits + 1 if box is None and self.in_team_and_world() else 0
             if retry_hits >= 2:
@@ -337,18 +527,38 @@ class AutoRechallenge(WWOneTimeTask, BaseCombatTask):
             super().run()
             self._mark('run begin')
             self.use_liberation = bool(self.config.get('Use Liberation', True))
-            self._check_runtime()
-            self.do_reset_to_false()
-            box = self._initial_screen()
+            need_initial = True
+            box = None
             while True:
-                if box is not None:
-                    self._restart(box)
-                self._check_team()
-                self._fresh()
-                if not self.in_combat():
-                    self._walk_and_start()
-                    self._wait_combat()
-                box = self._fight()
+                try:
+                    if need_initial:
+                        self._check_runtime()
+                        self.do_reset_to_false()
+                        box = self._initial_screen()
+                        need_initial = False
+                    if box is not None:
+                        self._restart(box)
+                    self._check_team()
+                    self._fresh()
+                    if not self.in_combat():
+                        self._walk_and_start()
+                        self._wait_combat()
+                    box = self._fight()
+                except self.ChallengeSucceeded:
+                    completed += 1
+                    self.info_set('已完成挑战次数', completed)
+                    self.info_set('挑战成功次数', self.info.get('挑战成功次数', 0) + 1)
+                    self._mark(f'round complete={completed}; challenge success confirmed')
+                    limit = self.config['挑战次数（0为持续）']
+                    reached = bool(limit and completed >= limit)
+                    self._tower_reenter(start_next=not reached)
+                    if reached:
+                        self._mark('challenge limit reached; stopped before opening next challenge')
+                        return
+                    self._check_runtime()
+                    need_initial = False
+                    box = None
+                    continue
                 completed += 1
                 self.info_set('已完成挑战次数', completed)
                 self._mark(f'round complete={completed}; explicit retry screen confirmed')
