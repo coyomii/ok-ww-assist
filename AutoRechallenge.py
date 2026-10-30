@@ -356,15 +356,24 @@ class AutoRechallenge(WWOneTimeTask, BaseCombatTask):
             except Exception:
                 pass
 
-    def _wait_retry(self, timeout):
+    def _wait_retry(self, timeout, allow_combat_resume=False):
         deadline = monotonic() + timeout
-        hits = 0
+        hits = combat_hits = 0
         while monotonic() < deadline:
             self._fresh()
             box = self._retry_box()
             hits = hits + 1 if box is not None else 0
             if hits >= 2:
                 return box
+            # Losing a lock-on / a team's NotInCombatException is not a result
+            # screen. Rejoin only after two fresh HUD + native combat checks.
+            active = (allow_combat_resume and box is None
+                      and self.in_team_and_world() and self.in_combat())
+            combat_hits = combat_hits + 1 if active else 0
+            if combat_hits >= 2:
+                self.info_set('战斗恢复次数', self.info.get('战斗恢复次数', 0) + 1)
+                self._mark('combat confirmed again on two fresh frames; resume same attempt without F')
+                return None
             self.sleep(self.POLL)
         raise RuntimeError('等待“重新挑战”超时；已停止，请检查结算画面。')
 
@@ -491,7 +500,17 @@ class AutoRechallenge(WWOneTimeTask, BaseCombatTask):
     def _fight(self):
         self._mark('combat begin')
         started = monotonic()
+        while monotonic() - started < self.config['单场超时（秒）']:
+            box = self._fight_segment(started)
+            if box is not None:
+                return box
+            # The segment already released inputs and reset character state.
+            # Keep the original attempt deadline; do not walk or press F again.
+        raise RuntimeError('单场超时；请检查战斗轴检查点及游戏画面。')
+
+    def _fight_segment(self, started):
         ended = False
+        character_dead = False
         self._testing_combat = True
         switched_to_healer = False
         try:
@@ -512,10 +531,11 @@ class AutoRechallenge(WWOneTimeTask, BaseCombatTask):
                 char.perform()
         except CharDeadException:
             ended = True
+            character_dead = True
             self._mark('character dead; waiting explicit retry screen')
         except NotInCombatException:
             ended = True
-            self._mark('axis returned out of combat; waiting explicit retry screen')
+            self._mark('axis returned out of combat; recheck active combat or explicit result screen')
         finally:
             self._testing_combat = False
             self._release()
@@ -526,7 +546,8 @@ class AutoRechallenge(WWOneTimeTask, BaseCombatTask):
         self._fresh()
         if self.in_team_and_world() and self._retry_box() is None:
             self.switch_healer()
-        return self._wait_retry(self.config['结算超时（秒）'])
+        return self._wait_retry(self.config['结算超时（秒）'],
+                                allow_combat_resume=not character_dead)
 
     def run(self):
         # Do not enable the ordinary AutoCombat trigger: this one-time task owns
